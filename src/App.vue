@@ -68,21 +68,26 @@ export default {
       }
     }
   },
-  setup() {
-    setTimeout(async () => {
-      try {
-        this.serialUSBPortList = await invoke("get_usb_serial_port_list");
-      } catch (e) {
-
-      }
-    }, 1000);
+  mounted() {
+    setTimeout(() => {
+      invoke("get_usb_serial_port_list")
+          .then(portList => {
+            this.serialUSBPortList = portList;
+          })
+          .catch(() => {
+          })
+    }, 1);
 
   },
 }
 </script>
 
 <template>
-  <div class="column-center">
+  <div class="column-center"
+       v-loading="loadingState"
+       element-loading-text="运行中..."
+       element-loading-background="rgba(122, 122, 122, 0.8)"
+  >
     <el-container>
       <el-main>
         <el-row :gutter="20" justify="space-between">

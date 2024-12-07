@@ -12,19 +12,24 @@ export default {
       serialUSBPortList: [],
 
       switch_connect_state: false,
-      switch_open_state: false,
+      switch_open_state: true,  // 为true对应着为Open，即为分闸。为false为Close，即为合闸。
     }
   },
   methods: {
     async handleRustCommand(command) {
-      this.loadingState = true;
+      const changeLoadingStateTimer = setTimeout(() => {
+        this.loadingState = true;
+      }, 300);
 
       try {
         await command();
       } catch (e) {
         await message(e.toString(), {title: "错误", kind: "error"});
       } finally {
-        this.loadingState = false;
+        clearTimeout(changeLoadingStateTimer);
+        if (this.loadingState) {
+          this.loadingState = false;
+        }
       }
     },
     async getSerialUSBPorts() {
@@ -37,6 +42,21 @@ export default {
         await this.handleRustCommand(async () => {
           await invoke("connect_switch", {serial_port_name: this.selectSerialPort});
           this.switch_connect_state = true;
+
+          // const switch_state = await invoke("get_switch_state");
+          // switch (switch_state) {
+          //   case "Open":
+          //     // 为open，分闸状态
+          //     this.switch_open_state = true;
+          //     break;
+          //   case "Close":
+          //     // 为close，合闸状态
+          //     this.switch_open_state = false;
+          //     break;
+          //   default:
+          //     // 为锁定状态
+          //     await message("闸门已被锁定！", {title: "警告", kind: "warning"});
+          // }
         })
       } else {
         await this.handleRustCommand(async () => {
@@ -47,15 +67,15 @@ export default {
     },
     async toggleOpenButton() {
       await this.handleRustCommand(async () => {
-        if (!this.switch_open_state) {
-          await invoke("open_switch");
-          this.switch_open_state = true;
-
-          // this.switch_open_state = await invoke("get_switch_state");
+        if (this.switch_open_state) {
+          // 分闸状态
+          await invoke("close_switch"); // 合闸
         } else {
-          await invoke("close_switch");
-          this.switch_open_state = false;
+          // 合闸状态
+          await invoke("open_switch");  // 分闸
         }
+
+        this.switch_open_state = !this.switch_open_state;
       })
     }
   },
@@ -126,7 +146,8 @@ export default {
         <el-row justify="center">
           <el-col :span="8">
             <el-button type="primary" @click="toggleOpenButton" size="large" :disabled="!switch_connect_state">
-              {{ switch_open_state ? "关闭" : "打开" }}
+              {{ switch_open_state ? "合闸" : "分闸" }}
+              <!--              状态为true，说明为Open，为分闸，那么点击就是合闸。-->
             </el-button>
           </el-col>
         </el-row>

@@ -25,16 +25,16 @@ pub struct SwitchController {
 #[derive(Serialize, TryFromPrimitive)]
 #[repr(u8)]
 pub enum ReadSwitchState {
-    Close = 0,
-    Open = 1,
+    Close = 0,  // 合闸
+    Open = 1,   // 分闸
     Lock = 2,
 }
 
 #[derive(IntoPrimitive)]
 #[repr(u16)]
 enum WriteSwitchState {
-    Open = 0x01,
-    Close = 0x02,
+    Open = 0x01,    // 分闸
+    Close = 0x02,   // 合闸
     // Lock = 0x03,
     // Unlock = 0x04,
 }
@@ -114,9 +114,15 @@ impl SwitchController {
                 port_type: UsbPort(usb_port_info),
             } = port
             {
+                let usb_serial_label = if let Some(product_label) = usb_port_info.product {
+                    format!("{} - ({})", product_label, &port_name)
+                } else {
+                    port_name.clone()
+                };
+
                 let info = USBSerialPortInfo {
-                    value: port_name.clone(),
-                    label: usb_port_info.product.unwrap_or(port_name),
+                    value: port_name,
+                    label: usb_serial_label,
                 };
 
                 usb_serial_port_list.push(info);

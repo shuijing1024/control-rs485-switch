@@ -43,6 +43,9 @@ export default {
           await invoke("connect_switch", {serial_port_name: this.selectSerialPort});
           this.switch_connect_state = true;
 
+          await invoke("open_switch");  // 分闸
+          this.switch_open_state = true;
+
           // const switch_state = await invoke("get_switch_state");
           // switch (switch_state) {
           //   case "Open":
@@ -70,12 +73,12 @@ export default {
         if (this.switch_open_state) {
           // 分闸状态
           await invoke("close_switch"); // 合闸
+          this.switch_open_state = false;
         } else {
           // 合闸状态
           await invoke("open_switch");  // 分闸
+          this.switch_open_state = true;
         }
-
-        this.switch_open_state = !this.switch_open_state;
       })
     }
   },

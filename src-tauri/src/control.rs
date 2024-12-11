@@ -4,11 +4,13 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::Serialize;
 use tokio_modbus::client::Context as modbusContext;
 use tokio_modbus::prelude::{rtu, Client, Reader, Writer};
+use tokio_modbus::Result as ModbusResult;
 use tokio_modbus::Slave;
 use tokio_serial::SerialPortType::UsbPort;
 use tokio_serial::{SerialPortInfo, SerialStream};
 
-const DEFAULT_TIMEOUT_SECOND: u64 = 3;
+const DEFAULT_SERIAL_TIMEOUT_MILLIS: u64 = 500;
+const DEFAULT_MODBUS_TIMEOUT_MILLIS: u64 = 1000;
 const DEFAULT_SWITCH_READ_REGISTER_ADDRESS: u16 = 0x0026;
 const DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS: u16 = 0x0101;
 
@@ -41,35 +43,45 @@ enum WriteSwitchState {
 
 impl SwitchController {
     pub async fn open_switch(&mut self) -> AnyHowResult<()> {
-        self.modbus_context
-            .write_single_register(
-                DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
-                WriteSwitchState::Open.into(),
-            )
-            .await
-            .context("无法打开开关")??;
-
-        Ok(())
+        Self::modbus_action_with_timeout(
+            async {
+                self.modbus_context
+                    .write_single_register(
+                        DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
+                        WriteSwitchState::Open.into(),
+                    )
+                    .await
+            },
+            "无法打开开关",
+        )
+        .await
     }
 
     pub async fn close_switch(&mut self) -> AnyHowResult<()> {
-        self.modbus_context
-            .write_single_register(
-                DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
-                WriteSwitchState::Close.into(),
-            )
-            .await
-            .context("无法关闭开关")??;
-
-        Ok(())
+        Self::modbus_action_with_timeout(
+            async {
+                self.modbus_context
+                    .write_single_register(
+                        DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
+                        WriteSwitchState::Close.into(),
+                    )
+                    .await
+            },
+            "无法关闭开关",
+        )
+        .await
     }
 
     pub async fn get_switch_state(&mut self) -> AnyHowResult<ReadSwitchState> {
-        let register_data_list = self
-            .modbus_context
-            .read_holding_registers(DEFAULT_SWITCH_READ_REGISTER_ADDRESS, 2)
-            .await
-            .context("无法读取开关状态")??;
+        let register_data_list = Self::modbus_action_with_timeout(
+            async {
+                self.modbus_context
+                    .read_holding_registers(DEFAULT_SWITCH_READ_REGISTER_ADDRESS, 2)
+                    .await
+            },
+            "无法读取开关状态",
+        )
+        .await?;
 
         if register_data_list.len() != 2 {
             return Err(anyhow::anyhow!("开关状态数据获取失败"));
@@ -90,8 +102,9 @@ impl SwitchController {
 
 impl SwitchController {
     pub fn new(port_name: String, baud_rate: u32, slave_id: u8) -> AnyHowResult<Self> {
-        let serial_builder = tokio_serial::new(&port_name, baud_rate)
-            .timeout(std::time::Duration::from_secs(DEFAULT_TIMEOUT_SECOND));
+        let serial_builder = tokio_serial::new(&port_name, baud_rate).timeout(
+            std::time::Duration::from_millis(DEFAULT_SERIAL_TIMEOUT_MILLIS),
+        );
 
         let serial_port =
             SerialStream::open(&serial_builder).context(format!("无法打开串口: {}", port_name))?;
@@ -134,5 +147,26 @@ impl SwitchController {
         }
 
         Ok(usb_serial_port_list)
+    }
+}
+
+impl SwitchController {
+    async fn modbus_action_with_timeout<F, T>(
+        action: F,
+        description_message: &str,
+    ) -> AnyHowResult<T>
+    where
+        F: std::future::Future<Output = ModbusResult<T>>,
+    {
+        tokio::select! {
+             result = action => {
+                if let Ok(Ok(need_message))=result{
+                    Ok(need_message)
+                }else{
+                    Err(anyhow::anyhow!("{}",description_message))
+                }
+            },
+            _ = tokio::time::sleep(std::time::Duration::from_millis(DEFAULT_MODBUS_TIMEOUT_MILLIS))=>Err(anyhow::anyhow!("modbus操作超时")),
+        }
     }
 }

@@ -9,8 +9,8 @@ use tokio_modbus::Slave;
 use tokio_serial::SerialPortType::UsbPort;
 use tokio_serial::{SerialPortInfo, SerialStream};
 
-const DEFAULT_SERIAL_TIMEOUT_MILLIS: u64 = 500;
-const DEFAULT_MODBUS_TIMEOUT_MILLIS: u64 = 1000;
+const DEFAULT_SERIAL_TIMEOUT_MILLIS: u64 = 1_000;
+const DEFAULT_MODBUS_TIMEOUT_MILLIS: u64 = 10_000;
 const DEFAULT_SWITCH_READ_REGISTER_ADDRESS: u16 = 0x0026;
 const DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS: u16 = 0x0101;
 
@@ -43,45 +43,27 @@ enum WriteSwitchState {
 
 impl SwitchController {
     pub async fn open_switch(&mut self) -> AnyHowResult<()> {
-        Self::modbus_action_with_timeout(
-            async {
-                self.modbus_context
-                    .write_single_register(
-                        DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
-                        WriteSwitchState::Open.into(),
-                    )
-                    .await
-            },
-            "无法打开开关",
-        )
-        .await
+        let action = self.modbus_context.write_single_register(
+            DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
+            WriteSwitchState::Open.into(),
+        );
+        Self::modbus_action_with_timeout(action, "无法打开开关").await
     }
 
     pub async fn close_switch(&mut self) -> AnyHowResult<()> {
-        Self::modbus_action_with_timeout(
-            async {
-                self.modbus_context
-                    .write_single_register(
-                        DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
-                        WriteSwitchState::Close.into(),
-                    )
-                    .await
-            },
-            "无法关闭开关",
-        )
-        .await
+        let action = self.modbus_context.write_single_register(
+            DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
+            WriteSwitchState::Close.into(),
+        );
+        Self::modbus_action_with_timeout(action, "无法关闭开关").await
     }
 
     pub async fn get_switch_state(&mut self) -> AnyHowResult<ReadSwitchState> {
-        let register_data_list = Self::modbus_action_with_timeout(
-            async {
-                self.modbus_context
-                    .read_holding_registers(DEFAULT_SWITCH_READ_REGISTER_ADDRESS, 2)
-                    .await
-            },
-            "无法读取开关状态",
-        )
-        .await?;
+        let action = self
+            .modbus_context
+            .read_holding_registers(DEFAULT_SWITCH_READ_REGISTER_ADDRESS, 2);
+        let register_data_list =
+            Self::modbus_action_with_timeout(action, "无法读取开关状态").await?;
 
         if register_data_list.len() != 2 {
             return Err(anyhow::anyhow!("开关状态数据获取失败"));

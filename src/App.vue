@@ -16,7 +16,7 @@ export default {
     }
   },
   methods: {
-    async handleRustCommand(command) {
+    async handleRustCommand(command, errorHandle) {
       const changeLoadingStateTimer = setTimeout(() => {
         this.loadingState = true;
       }, 300);
@@ -24,6 +24,10 @@ export default {
       try {
         await command();
       } catch (e) {
+        if (errorHandle !== undefined) {
+          errorHandle();
+        }
+
         await message(e.toString(), {title: "错误", kind: "error"});
       } finally {
         clearTimeout(changeLoadingStateTimer);
@@ -65,6 +69,8 @@ export default {
         await this.handleRustCommand(async () => {
           await invoke("disconnect_switch");
           this.switch_connect_state = false;
+
+          this.serialUSBPortList = await invoke("get_usb_serial_port_list");
         })
       }
     },
@@ -79,6 +85,18 @@ export default {
           await invoke("open_switch");  // 分闸
           this.switch_open_state = true;
         }
+      }, () => {
+        invoke("get_usb_serial_port_list")
+            .then((result) => {
+              this.serialUSBPortList = result;
+              let findIndex = this.serialUSBPortList.findIndex((item) => item.value === this.selectSerialPort);
+              if (findIndex === -1) {
+                this.selectSerialPort = "";
+                this.switch_connect_state = false;
+              }
+            })
+            .catch(() => {
+            });
       })
     }
   },

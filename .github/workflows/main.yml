@@ -65,6 +65,6 @@ jobs:
           tagName: ${{ github.ref }} # the action automatically replaces \_\_VERSION\_\_ with the app version.
           releaseName: '远程控制空气开关 v__VERSION__'
           releaseBody: '可以远程控制空气开关'
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

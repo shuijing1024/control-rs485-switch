@@ -47,7 +47,8 @@ impl SwitchController {
             DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
             WriteSwitchState::Open.into(),
         );
-        Self::modbus_action_with_timeout(action, "无法打开开关").await
+        Self::modbus_action_with_timeout(action, "无法打开开关", DEFAULT_MODBUS_TIMEOUT_MILLIS)
+            .await
     }
 
     pub async fn close_switch(&mut self) -> AnyHowResult<()> {
@@ -55,15 +56,20 @@ impl SwitchController {
             DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
             WriteSwitchState::Close.into(),
         );
-        Self::modbus_action_with_timeout(action, "无法关闭开关").await
+        Self::modbus_action_with_timeout(action, "无法关闭开关", DEFAULT_MODBUS_TIMEOUT_MILLIS)
+            .await
     }
 
     pub async fn get_switch_state(&mut self) -> AnyHowResult<ReadSwitchState> {
         let action = self
             .modbus_context
             .read_holding_registers(DEFAULT_SWITCH_READ_REGISTER_ADDRESS, 2);
-        let register_data_list =
-            Self::modbus_action_with_timeout(action, "无法读取开关状态").await?;
+        let register_data_list = Self::modbus_action_with_timeout(
+            action,
+            "无法读取开关状态",
+            DEFAULT_MODBUS_TIMEOUT_MILLIS,
+        )
+        .await?;
 
         if register_data_list.len() != 2 {
             return Err(anyhow::anyhow!("开关状态数据获取失败"));
@@ -136,6 +142,7 @@ impl SwitchController {
     async fn modbus_action_with_timeout<F, T>(
         action: F,
         description_message: &str,
+        time_out_millis: u64,
     ) -> AnyHowResult<T>
     where
         F: std::future::Future<Output = ModbusResult<T>>,
@@ -148,7 +155,7 @@ impl SwitchController {
                     Err(anyhow::anyhow!("{}",description_message))
                 }
             },
-            _ = tokio::time::sleep(std::time::Duration::from_millis(DEFAULT_MODBUS_TIMEOUT_MILLIS))=>Err(anyhow::anyhow!("modbus操作超时")),
+            _ = tokio::time::sleep(std::time::Duration::from_millis(time_out_millis))=>Err(anyhow::anyhow!("modbus操作超时")),
         }
     }
 }

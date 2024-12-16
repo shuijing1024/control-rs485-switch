@@ -1,7 +1,7 @@
 use crate::prelude::AnyHowResult;
 use anyhow::Context;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio_modbus::client::Context as modbusContext;
 use tokio_modbus::prelude::{rtu, Client, Reader, Writer};
 use tokio_modbus::Result as ModbusResult;
@@ -10,7 +10,7 @@ use tokio_serial::SerialPortType::UsbPort;
 use tokio_serial::{SerialPortInfo, SerialStream};
 
 const DEFAULT_SERIAL_TIMEOUT_MILLIS: u64 = 1_000;
-const DEFAULT_MODBUS_TIMEOUT_MILLIS: u64 = 10_000;
+const DEFAULT_MODBUS_TIMEOUT_MILLIS: u64 = 3_000;
 const DEFAULT_SWITCH_READ_REGISTER_ADDRESS: u16 = 0x0026;
 const DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS: u16 = 0x0101;
 
@@ -27,36 +27,27 @@ pub struct SwitchController {
 #[derive(Serialize, TryFromPrimitive)]
 #[repr(u8)]
 pub enum ReadSwitchState {
-    Close = 0, // 合闸
-    Open = 1,  // 分闸
-    Lock = 2,
+    Close = 0, // 分闸
+    Open = 1,  // 合闸
+    Lock = 2,  // 上锁
 }
 
-#[derive(IntoPrimitive)]
+#[derive(IntoPrimitive, Deserialize)]
 #[repr(u16)]
-enum WriteSwitchState {
-    Open = 0x01, // 分闸
-    Close = 0x02, // 合闸
-                 // Lock = 0x03,
-                 // Unlock = 0x04,
+pub enum WriteSwitchState {
+    Open = 0x01,  // 合闸（也就是开关拨到“1”）
+    Close = 0x02, // 分闸（开关拨到“0”）
+    Lock = 0x03,
+    Unlock = 0x04,
 }
 
 impl SwitchController {
-    pub async fn open_switch(&mut self) -> AnyHowResult<()> {
+    pub async fn operate_switch(&mut self, operation_state: WriteSwitchState) -> AnyHowResult<()> {
         let action = self.modbus_context.write_single_register(
             DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
-            WriteSwitchState::Open.into(),
+            operation_state.into(),
         );
         Self::modbus_action_with_timeout(action, "无法打开开关", DEFAULT_MODBUS_TIMEOUT_MILLIS)
-            .await
-    }
-
-    pub async fn close_switch(&mut self) -> AnyHowResult<()> {
-        let action = self.modbus_context.write_single_register(
-            DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
-            WriteSwitchState::Close.into(),
-        );
-        Self::modbus_action_with_timeout(action, "无法关闭开关", DEFAULT_MODBUS_TIMEOUT_MILLIS)
             .await
     }
 

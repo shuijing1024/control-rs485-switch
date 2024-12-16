@@ -11,8 +11,11 @@ export default {
       selectSerialPort: "",
       serialUSBPortList: [],
 
+      slaveId: 1,
+      baudRate: 115200,
+
       switch_connect_state: false,
-      switch_open_state: true,  // 为true对应着为Open，即为分闸。为false为Close，即为合闸。
+      switch_operate_state: "Open",
     }
   },
   methods: {
@@ -44,26 +47,19 @@ export default {
     async toggleConnectButton() {
       if (!this.switch_connect_state) {
         await this.handleRustCommand(async () => {
-          await invoke("connect_switch", {serial_port_name: this.selectSerialPort});
+          await invoke("connect_switch", {
+            serial_port_name: this.selectSerialPort,
+            baud_rate: this.baudRate,
+            slave_id: this.slaveId
+          });
+
+          this.switch_operate_state = await invoke("get_switch_state");
+
           this.switch_connect_state = true;
-
-          await invoke("open_switch");  // 分闸
-          this.switch_open_state = true;
-
-          // const switch_state = await invoke("get_switch_state");
-          // switch (switch_state) {
-          //   case "Open":
-          //     // 为open，分闸状态
-          //     this.switch_open_state = true;
-          //     break;
-          //   case "Close":
-          //     // 为close，合闸状态
-          //     this.switch_open_state = false;
-          //     break;
-          //   default:
-          //     // 为锁定状态
-          //     await message("闸门已被锁定！", {title: "警告", kind: "warning"});
-          // }
+        }, () => {
+          invoke("disconnect_switch")
+              .catch(() => {
+              });
         })
       } else {
         await this.handleRustCommand(async () => {
@@ -74,17 +70,27 @@ export default {
         })
       }
     },
-    async toggleOpenButton() {
+    async toggleOperateButton() {
       await this.handleRustCommand(async () => {
-        if (this.switch_open_state) {
-          // 分闸状态
-          await invoke("close_switch"); // 合闸
-          this.switch_open_state = false;
-        } else {
-          // 合闸状态
-          await invoke("open_switch");  // 分闸
-          this.switch_open_state = true;
+        let next_operate_state = "Open";
+        switch (this.switch_operate_state) {
+          case "Open":
+            next_operate_state = "Close";
+            break;
+          case "Close":
+            next_operate_state = "Open"
+            break;
+          case "Lock":
+            next_operate_state = "Unlock";
+            break;
+          case "Unlock":
+            next_operate_state = "Lock"
+            break;
+          default:
+            break;
         }
+        await invoke("operate_switch", {operation_state: next_operate_state});
+        this.switch_operate_state = next_operate_state
       }, () => {
         invoke("get_usb_serial_port_list")
             .then((result) => {
@@ -106,6 +112,21 @@ export default {
         return this.selectSerialPort !== "";
       } else {
         return true;
+      }
+    },
+
+    toggle_operate_button_display_name() {
+      switch (this.switch_operate_state) {
+        case "Open":
+          return "分闸";
+        case "Close":
+          return "合闸";
+        case "Lock":
+          return "解锁";
+        case "Unlock":
+          return "锁定";
+        default:
+          return "未知状态";
       }
     }
   },
@@ -148,14 +169,24 @@ export default {
               />
             </el-select>
           </el-col>
-          <el-col :span="4">
+          <el-col :span="6">
             <el-button type="primary"
                        @click="getSerialUSBPorts"
                        :disabled="switch_connect_state"
                        size="large">刷新串口
             </el-button>
           </el-col>
-          <el-col :span="4">
+        </el-row>
+        <el-row :gutter="20" justify="space-between">
+          <el-col :span="8">
+            <el-input-number v-model="baudRate" :min="4800" :max="115200" size="large" :step="100"
+                             :disabled="switch_connect_state" controls-position="right"/>
+          </el-col>
+          <el-col :span="8">
+            <el-input-number v-model="slaveId" :min="1" :max="255" size="large" :disabled="switch_connect_state"
+                             controls-position="right"/>
+          </el-col>
+          <el-col :span="6">
             <el-button type="primary"
                        @click="toggleConnectButton"
                        :disabled="!toggle_connect_button_enable_flag"
@@ -166,9 +197,8 @@ export default {
         </el-row>
         <el-row justify="center">
           <el-col :span="8">
-            <el-button type="primary" @click="toggleOpenButton" size="large" :disabled="!switch_connect_state">
-              {{ switch_open_state ? "合闸" : "分闸" }}
-              <!--              状态为true，说明为Open，为分闸，那么点击就是合闸。-->
+            <el-button type="primary" @click="toggleOperateButton" size="large" :disabled="!switch_connect_state">
+              {{ toggle_operate_button_display_name }}
             </el-button>
           </el-col>
         </el-row>

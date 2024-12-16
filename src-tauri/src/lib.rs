@@ -8,9 +8,6 @@ mod prelude;
 use control::*;
 use prelude::*;
 
-const DEFAULT_SLAVE_ID: u8 = 255;
-const DEFAULT_BAUD_RATE: u32 = 115200;
-
 struct CustomAppState {
     switch_controller: Option<SwitchController>,
 }
@@ -23,17 +20,18 @@ async fn get_usb_serial_port_list() -> CustomAppResult<Vec<USBSerialPortInfo>> {
 #[tauri::command(rename_all = "snake_case")]
 async fn connect_switch(
     serial_port_name: String,
+    slave_id: u8,
+    baud_rate: u32,
     state: State<'_, Mutex<CustomAppState>>,
 ) -> CustomAppResult<()> {
     let mut custom_app_state = state.lock().await;
 
-    if custom_app_state.switch_controller.is_some() {
-        return Err("请先关闭已连接开关".to_string());
+    if let Some(ref mut switch_controller) = custom_app_state.switch_controller {
+        switch_controller.disconnect().await.map_to_message()?;
     }
 
     let switch_controller =
-        SwitchController::new(serial_port_name, DEFAULT_BAUD_RATE, DEFAULT_SLAVE_ID)
-            .map_to_message()?;
+        SwitchController::new(serial_port_name, baud_rate, slave_id).map_to_message()?;
 
     custom_app_state.switch_controller = Some(switch_controller);
 
@@ -56,7 +54,9 @@ async fn disconnect_switch(state: State<'_, Mutex<CustomAppState>>) -> CustomApp
 }
 
 #[tauri::command(rename_all = "snake_case")]
-async fn get_switch_state(state: State<'_, Mutex<CustomAppState>>) -> CustomAppResult<ReadSwitchState> {
+async fn get_switch_state(
+    state: State<'_, Mutex<CustomAppState>>,
+) -> CustomAppResult<ReadSwitchState> {
     let mut custom_app_state = state.lock().await;
 
     if let Some(ref mut switch_controller) = custom_app_state.switch_controller {
@@ -67,22 +67,17 @@ async fn get_switch_state(state: State<'_, Mutex<CustomAppState>>) -> CustomAppR
 }
 
 #[tauri::command(rename_all = "snake_case")]
-async fn open_switch(state: State<'_, Mutex<CustomAppState>>) -> CustomAppResult<()> {
+async fn operate_switch(
+    state: State<'_, Mutex<CustomAppState>>,
+    operation_state: WriteSwitchState,
+) -> CustomAppResult<()> {
     let mut custom_app_state = state.lock().await;
 
     if let Some(ref mut switch_controller) = custom_app_state.switch_controller {
-        switch_controller.open_switch().await.map_to_message()
-    } else {
-        Err("未连接设备".to_string())
-    }
-}
-
-#[tauri::command(rename_all = "snake_case")]
-async fn close_switch(state: State<'_, Mutex<CustomAppState>>) -> CustomAppResult<()> {
-    let mut custom_app_state = state.lock().await;
-
-    if let Some(ref mut switch_controller) = custom_app_state.switch_controller {
-        switch_controller.close_switch().await.map_to_message()
+        switch_controller
+            .operate_switch(operation_state)
+            .await
+            .map_to_message()
     } else {
         Err("未连接设备".to_string())
     }
@@ -100,8 +95,7 @@ pub fn run() {
             connect_switch,
             disconnect_switch,
             get_switch_state,
-            open_switch,
-            close_switch
+            operate_switch
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

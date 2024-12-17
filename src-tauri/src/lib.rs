@@ -19,9 +19,7 @@ async fn get_usb_serial_port_list() -> CustomAppResult<Vec<USBSerialPortInfo>> {
 
 #[tauri::command(rename_all = "snake_case")]
 async fn connect_switch(
-    serial_port_name: String,
-    slave_id: u8,
-    baud_rate: u32,
+    modbus_config: ModbusConfig,
     state: State<'_, Mutex<CustomAppState>>,
 ) -> CustomAppResult<()> {
     let mut custom_app_state = state.lock().await;
@@ -30,8 +28,7 @@ async fn connect_switch(
         switch_controller.disconnect().await.map_to_message()?;
     }
 
-    let switch_controller =
-        SwitchController::new(serial_port_name, baud_rate, slave_id).map_to_message()?;
+    let switch_controller = SwitchController::new(modbus_config).map_to_message()?;
 
     custom_app_state.switch_controller = Some(switch_controller);
 
@@ -83,6 +80,16 @@ async fn operate_switch(
     }
 }
 
+#[tauri::command(rename_all = "snake_case")]
+async fn get_app_config() -> CustomAppResult<ModbusConfig> {
+    SwitchController::get_app_config().await.map_to_message()
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn set_app_config(modbus_config: ModbusConfig) -> CustomAppResult<()> {
+    SwitchController::set_app_config(modbus_config).await.map_to_message()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -100,7 +107,9 @@ pub fn run() {
             connect_switch,
             disconnect_switch,
             get_switch_state,
-            operate_switch
+            operate_switch,
+            get_app_config,
+            set_app_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

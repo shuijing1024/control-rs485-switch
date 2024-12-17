@@ -441,12 +441,13 @@ dependencies = [
 
 [[package]]
 name = "control-rs485-switch"
-version = "1.0.9"
+version = "1.0.10"
 dependencies = [
  "anyhow",
  "chrono",
  "num_enum",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

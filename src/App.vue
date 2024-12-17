@@ -68,14 +68,25 @@ export default {
       if (!this.switch_connect_state) {
         await this.handleRustCommand(async () => {
           await invoke("connect_switch", {
-            serial_port_name: this.selectSerialPort,
-            baud_rate: this.baudRate,
-            slave_id: this.slaveId
+            modbus_config: {
+              port_name: this.selectSerialPort,
+              baud_rate: this.baudRate,
+              slave_id: this.slaveId
+            }
           });
 
           this.switch_operate_state = await invoke("get_switch_state");
 
           this.switch_connect_state = true;
+
+          invoke("set_app_config", {
+            modbus_config: {
+              port_name: this.selectSerialPort,
+              baud_rate: this.baudRate,
+              slave_id: this.slaveId
+            }
+          }).catch(() => {
+          });
         }, () => {
           invoke("disconnect_switch")
               .catch(() => {
@@ -155,6 +166,16 @@ export default {
       invoke("get_usb_serial_port_list")
           .then(portList => {
             this.serialUSBPortList = portList;
+
+            invoke("get_app_config").then(result => {
+              let findIndex = portList.findIndex((item) => item.value === result.port_name);
+              if (findIndex !== -1) {
+                this.selectSerialPort = result.port_name;
+              }
+
+              this.baudRate = result.baud_rate;
+              this.slaveId = result.slave_id;
+            })
           })
           .catch(() => {
           })

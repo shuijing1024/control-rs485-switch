@@ -1,9 +1,14 @@
 <script>
 import {invoke} from "@tauri-apps/api/core";
 import {message} from '@tauri-apps/plugin-dialog';
+import {Close, FullScreen, Minus} from "@element-plus/icons-vue";
+import {Window} from '@tauri-apps/api/window';
+
+const appWindow = new Window('main');
 
 export default {
   name: "App",
+  components: {FullScreen, Close, Minus},
   data() {
     return {
       loadingState: false,
@@ -19,6 +24,21 @@ export default {
     }
   },
   methods: {
+    handleWindowsAction(action) {
+      switch (action) {
+        case "minimize":
+          appWindow.minimize();
+          break;
+        case "maximize":
+          appWindow.toggleMaximize();
+          break;
+        case "close":
+          appWindow.close();
+          break;
+        default:
+          break;
+      }
+    },
     async handleRustCommand(command, errorHandle) {
       const changeLoadingStateTimer = setTimeout(() => {
         this.loadingState = true;
@@ -145,69 +165,113 @@ export default {
 </script>
 
 <template>
-  <div class="column-center"
-       v-loading="loadingState"
-       element-loading-text="运行中..."
-       element-loading-background="rgba(122, 122, 122, 0.8)"
-  >
-    <el-container>
-      <el-main>
-        <el-row :gutter="20" justify="space-between">
-          <el-col :span="16">
-            <el-select
-                v-model="selectSerialPort"
-                placeholder="尚未选择串口"
-                no-data-text="未找到USB串口"
-                size="large"
-                :disabled="switch_connect_state"
-            >
-              <el-option
-                  v-for="item in serialUSBPortList"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value"
-              />
-            </el-select>
-          </el-col>
-          <el-col :span="6">
-            <el-button type="primary"
-                       @click="getSerialUSBPorts"
-                       :disabled="switch_connect_state"
-                       size="large">刷新串口
-            </el-button>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20" justify="space-between">
-          <el-col :span="8">
-            <el-input-number v-model="baudRate" :min="4800" :max="115200" size="large" :step="100"
-                             :disabled="switch_connect_state" controls-position="right"/>
-          </el-col>
-          <el-col :span="8">
-            <el-input-number v-model="slaveId" :min="1" :max="255" size="large" :disabled="switch_connect_state"
-                             controls-position="right"/>
-          </el-col>
-          <el-col :span="6">
-            <el-button type="primary"
-                       @click="toggleConnectButton"
-                       :disabled="!toggle_connect_button_enable_flag"
-                       size="large">
-              {{ switch_connect_state ? "断开" : "连接" }}
-            </el-button>
-          </el-col>
-        </el-row>
-        <el-row justify="center">
-          <el-col :span="8">
-            <el-button type="primary" @click="toggleOperateButton" size="large" :disabled="!switch_connect_state">
-              {{ toggle_operate_button_display_name }}
-            </el-button>
-          </el-col>
-        </el-row>
-      </el-main>
-    </el-container>
+  <div class="custom-container">
+    <div data-tauri-drag-region class="titlebar">
+      <div class="titlebar-button" id="titlebar-minimize" @click="handleWindowsAction('minimize')">
+        <el-icon>
+          <Minus/>
+        </el-icon>
+      </div>
+      <div class="titlebar-button" id="titlebar-maximize" @click="handleWindowsAction('maximize')">
+        <el-icon>
+          <FullScreen/>
+        </el-icon>
+      </div>
+      <div class="titlebar-button" id="titlebar-close" @click="handleWindowsAction('close')">
+        <el-icon>
+          <Close/>
+        </el-icon>
+      </div>
+    </div>
+
+    <div class="column-center"
+         v-loading="loadingState"
+         element-loading-text="运行中..."
+         element-loading-background="rgba(122, 122, 122, 0.8)"
+    >
+      <el-container>
+        <el-main>
+          <el-row :gutter="20" justify="space-between">
+            <el-col :span="16">
+              <el-select
+                  v-model="selectSerialPort"
+                  placeholder="尚未选择串口"
+                  no-data-text="未找到USB串口"
+                  size="large"
+                  :disabled="switch_connect_state"
+              >
+                <el-option
+                    v-for="item in serialUSBPortList"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                />
+              </el-select>
+            </el-col>
+            <el-col :span="6">
+              <el-button type="primary"
+                         @click="getSerialUSBPorts"
+                         :disabled="switch_connect_state"
+                         size="large">刷新串口
+              </el-button>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20" justify="space-between">
+            <el-col :span="8">
+              <el-input-number v-model="baudRate" :min="4800" :max="115200" size="large" :step="100"
+                               :disabled="switch_connect_state" controls-position="right"/>
+            </el-col>
+            <el-col :span="8">
+              <el-input-number v-model="slaveId" :min="1" :max="255" size="large" :disabled="switch_connect_state"
+                               controls-position="right"/>
+            </el-col>
+            <el-col :span="6">
+              <el-button type="primary"
+                         @click="toggleConnectButton"
+                         :disabled="!toggle_connect_button_enable_flag"
+                         size="large">
+                {{ switch_connect_state ? "断开" : "连接" }}
+              </el-button>
+            </el-col>
+          </el-row>
+          <el-row justify="center">
+            <el-col :span="8">
+              <el-button type="primary" @click="toggleOperateButton" size="large" :disabled="!switch_connect_state">
+                {{ toggle_operate_button_display_name }}
+              </el-button>
+            </el-col>
+          </el-row>
+        </el-main>
+      </el-container>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.titlebar {
+  height: 30px;
+  user-select: none;
+  display: flex;
+  justify-content: flex-end;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.titlebar-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 30px;
+  height: 30px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.titlebar-button:hover {
+  background: #5bbec3;
+}
+
 .el-row {
   margin-bottom: 30px;
 }
@@ -224,11 +288,19 @@ export default {
   width: 100%;
 }
 
+.custom-container {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 100%;
+}
+
 .column-center {
   display: flex;
+  flex-grow: 1;
   justify-content: center;
   align-items: center;
-  height: 100%;
+  position: relative;
 }
 </style>
 

@@ -1,5 +1,6 @@
 use crate::prelude::AnyHowResult;
 use anyhow::Context;
+use chrono::{DateTime, Local};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{Deserialize, Serialize};
 use tokio_modbus::client::Context as modbusContext;
@@ -146,7 +147,10 @@ impl SwitchController {
                     Err(anyhow::anyhow!("{}",description_message))
                 }
             },
-            _ = tokio::time::sleep(std::time::Duration::from_millis(time_out_millis))=>Err(anyhow::anyhow!("modbus操作超时")),
+            _ = tokio::time::sleep(std::time::Duration::from_millis(time_out_millis))=>{
+                let now: DateTime<Local> = Local::now();
+                let now_string =  now.format("%Y-%m-%d %H:%M:%S%.3f");
+                Err(anyhow::anyhow!("{}\n当前时间为:{}","modbus操作超时",now_string))},
         }
     }
 }

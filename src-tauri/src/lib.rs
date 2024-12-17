@@ -1,6 +1,6 @@
 use crate::prelude::CustomAppResult;
 use tauri::async_runtime::Mutex;
-use tauri::State;
+use tauri::{Manager, State};
 
 mod control;
 mod prelude;
@@ -86,6 +86,11 @@ async fn operate_switch(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            let window = app.get_webview_window("main").unwrap();
+            window.set_shadow(true)?;
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(CustomAppState {
             switch_controller: None,

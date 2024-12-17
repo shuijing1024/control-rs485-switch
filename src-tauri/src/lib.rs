@@ -87,7 +87,26 @@ async fn get_app_config() -> CustomAppResult<ModbusConfig> {
 
 #[tauri::command(rename_all = "snake_case")]
 async fn set_app_config(modbus_config: ModbusConfig) -> CustomAppResult<()> {
-    SwitchController::set_app_config(modbus_config).await.map_to_message()
+    SwitchController::set_app_config(modbus_config)
+        .await
+        .map_to_message()
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn set_baud_rate(
+    state: State<'_, Mutex<CustomAppState>>,
+    baud_rate: u32,
+) -> CustomAppResult<()> {
+    let mut custom_app_state = state.lock().await;
+
+    if let Some(ref mut switch_controller) = custom_app_state.switch_controller {
+        switch_controller
+            .set_baud_rate(baud_rate)
+            .await
+            .map_to_message()
+    } else {
+        Err("未连接设备".to_string())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -109,7 +128,8 @@ pub fn run() {
             get_switch_state,
             operate_switch,
             get_app_config,
-            set_app_config
+            set_app_config,
+            set_baud_rate
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

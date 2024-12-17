@@ -17,7 +17,10 @@ export default {
       serialUSBPortList: [],
 
       slaveId: 1,
-      baudRate: 115200,
+      baudRate: 4800,
+      timeout: 6_000,
+
+      resetBaudRate: 4800,
 
       switch_connect_state: false,
       switch_operate_state: "Open",
@@ -48,10 +51,13 @@ export default {
         await command();
       } catch (e) {
         if (errorHandle !== undefined) {
-          errorHandle();
+          let result = errorHandle();
+          if (result !== true) {
+            await message(e.toString(), {title: "错误", kind: "error"});
+          }
+        } else {
+          await message(e.toString(), {title: "错误", kind: "error"});
         }
-
-        await message(e.toString(), {title: "错误", kind: "error"});
       } finally {
         clearTimeout(changeLoadingStateTimer);
         if (this.loadingState) {
@@ -71,7 +77,8 @@ export default {
             modbus_config: {
               port_name: this.selectSerialPort,
               baud_rate: this.baudRate,
-              slave_id: this.slaveId
+              slave_id: this.slaveId,
+              timeout: this.timeout,
             }
           });
 
@@ -83,7 +90,8 @@ export default {
             modbus_config: {
               port_name: this.selectSerialPort,
               baud_rate: this.baudRate,
-              slave_id: this.slaveId
+              slave_id: this.slaveId,
+              timeout: this.timeout,
             }
           }).catch(() => {
           });
@@ -128,13 +136,26 @@ export default {
               this.serialUSBPortList = result;
               let findIndex = this.serialUSBPortList.findIndex((item) => item.value === this.selectSerialPort);
               if (findIndex === -1) {
-                this.selectSerialPort = "";
-                this.switch_connect_state = false;
+                this.toggleConnectButton().catch(() => {
+                });
               }
             })
             .catch(() => {
             });
       })
+    },
+    async changeBaudRate() {
+      await this.handleRustCommand(async () => {
+        await invoke("set_baud_rate", {
+          baud_rate: this.resetBaudRate,
+        });
+      }, () => {
+        this.baudRate = this.resetBaudRate;
+        this.toggleConnectButton().catch(() => {
+        });
+
+        return true;
+      });
     }
   },
   computed: {
@@ -175,6 +196,7 @@ export default {
 
               this.baudRate = result.baud_rate;
               this.slaveId = result.slave_id;
+              this.timeout = result.timeout;
             })
           })
           .catch(() => {
@@ -238,13 +260,17 @@ export default {
             </el-col>
           </el-row>
           <el-row :gutter="20" justify="space-between">
-            <el-col :span="8">
-              <el-input-number v-model="baudRate" :min="4800" :max="115200" size="large" :step="100"
+            <el-col :span="6">
+              <el-input-number v-model="baudRate" :min="4800" :max="115200" size="large" :step="200"
                                :disabled="switch_connect_state" controls-position="right"/>
             </el-col>
-            <el-col :span="8">
+            <el-col :span="6">
               <el-input-number v-model="slaveId" :min="1" :max="255" size="large" :disabled="switch_connect_state"
                                controls-position="right"/>
+            </el-col>
+            <el-col :span="6">
+              <el-input-number v-model="timeout" :min="1000" :max="100_000" size="large" :step="100"
+                               :disabled="switch_connect_state" controls-position="right"/>
             </el-col>
             <el-col :span="6">
               <el-button type="primary"
@@ -252,6 +278,21 @@ export default {
                          :disabled="!toggle_connect_button_enable_flag"
                          size="large">
                 {{ switch_connect_state ? "断开" : "连接" }}
+              </el-button>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20" justify="space-between">
+            <el-col :span="6">
+              <el-input-number v-model="resetBaudRate" :min="4800" :max="115200" size="large" :step="200"
+                               :disabled="!switch_connect_state"
+                               controls-position="right"/>
+            </el-col>
+            <el-col :span="6">
+              <el-button type="primary"
+                         @click="changeBaudRate"
+                         :disabled="!switch_connect_state"
+                         size="large">
+                重设波特率
               </el-button>
             </el-col>
           </el-row>

@@ -14,9 +14,10 @@ use tokio_serial::SerialPortType::UsbPort;
 use tokio_serial::{SerialPortInfo, SerialStream};
 
 const DEFAULT_SERIAL_TIMEOUT_MILLIS: u64 = 1_000;
-const DEFAULT_MODBUS_TIMEOUT_MILLIS: u64 = 3_000;
-const DEFAULT_SWITCH_READ_REGISTER_ADDRESS: u16 = 0x0026;
-const DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS: u16 = 0x0101;
+const DEFAULT_MODBUS_TIMEOUT_MILLIS: u64 = 6_000;
+const READ_SWITCH_STATE_ADDRESS: u16 = 0x0026;
+const WRITE_SWITCH_STATE_ADDRESS: u16 = 0x0101;
+const WRITE_BAUD_RATE_ADDRESS: u16 = 0x0150;
 
 const APP_CONFIG_DIR: &str = "control_rs485_switch";
 const APP_CONTROLLER_CONFIG_FILE_NAME: &str = "switch_config.json";
@@ -29,6 +30,7 @@ pub struct USBSerialPortInfo {
 
 pub struct SwitchController {
     modbus_context: modbusContext,
+    timeout: u64,
 }
 
 #[derive(Serialize, TryFromPrimitive)]
@@ -53,38 +55,34 @@ pub struct ModbusConfig {
     port_name: String,
     baud_rate: u32,
     slave_id: u8,
+    timeout: u64,
 }
 
 impl Default for ModbusConfig {
     fn default() -> Self {
         Self {
             port_name: "COM7".to_string(),
-            baud_rate: 115200,
+            baud_rate: 4800,
             slave_id: 1,
+            timeout: DEFAULT_MODBUS_TIMEOUT_MILLIS,
         }
     }
 }
 
 impl SwitchController {
     pub async fn operate_switch(&mut self, operation_state: WriteSwitchState) -> AnyHowResult<()> {
-        let action = self.modbus_context.write_single_register(
-            DEFAULT_SWITCH_WRITE_REGISTER_ADDRESS,
-            operation_state.into(),
-        );
-        Self::modbus_action_with_timeout(action, "无法打开开关", DEFAULT_MODBUS_TIMEOUT_MILLIS)
-            .await
+        let action = self
+            .modbus_context
+            .write_single_register(WRITE_SWITCH_STATE_ADDRESS, operation_state.into());
+        Self::modbus_action_with_timeout(action, "无法打开开关", self.timeout).await
     }
 
     pub async fn get_switch_state(&mut self) -> AnyHowResult<ReadSwitchState> {
         let action = self
             .modbus_context
-            .read_holding_registers(DEFAULT_SWITCH_READ_REGISTER_ADDRESS, 2);
-        let register_data_list = Self::modbus_action_with_timeout(
-            action,
-            "无法读取开关状态",
-            DEFAULT_MODBUS_TIMEOUT_MILLIS,
-        )
-        .await?;
+            .read_holding_registers(READ_SWITCH_STATE_ADDRESS, 2);
+        let register_data_list =
+            Self::modbus_action_with_timeout(action, "无法读取开关状态", self.timeout).await?;
 
         if register_data_list.len() != 2 {
             return Err(anyhow::anyhow!("开关状态数据获取失败"));
@@ -93,6 +91,18 @@ impl SwitchController {
         let register_data = (register_data_list[1] & 0x00ff) as u8;
 
         ReadSwitchState::try_from(register_data).context("无法解析开关状态")
+    }
+
+    pub async fn set_baud_rate(&mut self, baud_rate: u32) -> AnyHowResult<()> {
+        let baud_rate_register_data_high = ((baud_rate & 0xffff0000) >> 16) as u16;
+        let baud_rate_register_data_low = (baud_rate & 0x0000ffff) as u16;
+        let baud_rate_register_data = [baud_rate_register_data_high, baud_rate_register_data_low];
+
+        let action = self
+            .modbus_context
+            .write_multiple_registers(WRITE_BAUD_RATE_ADDRESS, &baud_rate_register_data);
+
+        Self::modbus_action_with_timeout(action, "无法更改波特率", self.timeout).await
     }
 
     pub async fn disconnect(&mut self) -> AnyHowResult<()> {
@@ -117,7 +127,10 @@ impl SwitchController {
 
         let modbus_context = rtu::attach_slave(serial_port, slave);
 
-        Ok(Self { modbus_context })
+        Ok(Self {
+            modbus_context,
+            timeout: modbus_config.timeout,
+        })
     }
 
     pub fn get_usb_serial_port_list() -> AnyHowResult<Vec<USBSerialPortInfo>> {

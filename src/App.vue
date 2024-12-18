@@ -234,8 +234,8 @@ export default {
     >
       <el-container>
         <el-main>
-          <el-row :gutter="20" justify="space-between">
-            <el-col :span="16">
+          <el-row>
+            <el-col :span="14">
               <el-select
                   v-model="selectSerialPort"
                   placeholder="尚未选择串口"
@@ -251,7 +251,7 @@ export default {
                 />
               </el-select>
             </el-col>
-            <el-col :span="6">
+            <el-col :span="6" :offset="4">
               <el-button type="primary"
                          @click="getSerialUSBPorts"
                          :disabled="switch_connect_state"
@@ -259,20 +259,20 @@ export default {
               </el-button>
             </el-col>
           </el-row>
-          <el-row :gutter="20" justify="space-between">
-            <el-col :span="6">
+          <el-row>
+            <el-col :span="4">
               <el-input-number v-model="baudRate" :min="4800" :max="115200" size="large" :step="200"
                                :disabled="switch_connect_state" controls-position="right"/>
             </el-col>
-            <el-col :span="6">
+            <el-col :span="4" :offset="1">
               <el-input-number v-model="slaveId" :min="1" :max="255" size="large" :disabled="switch_connect_state"
                                controls-position="right"/>
             </el-col>
-            <el-col :span="6">
+            <el-col :span="4" :offset="1">
               <el-input-number v-model="timeout" :min="1000" :max="100_000" size="large" :step="100"
                                :disabled="switch_connect_state" controls-position="right"/>
             </el-col>
-            <el-col :span="6">
+            <el-col :span="6" :offset="4">
               <el-button type="primary"
                          @click="toggleConnectButton"
                          :disabled="!toggle_connect_button_enable_flag"
@@ -281,13 +281,13 @@ export default {
               </el-button>
             </el-col>
           </el-row>
-          <el-row :gutter="20" justify="space-between">
-            <el-col :span="6">
+          <el-row>
+            <el-col :span="4">
               <el-input-number v-model="resetBaudRate" :min="4800" :max="115200" size="large" :step="200"
                                :disabled="!switch_connect_state"
                                controls-position="right"/>
             </el-col>
-            <el-col :span="6">
+            <el-col :span="6" :offset="14">
               <el-button type="primary"
                          @click="changeBaudRate"
                          :disabled="!switch_connect_state"
@@ -347,6 +347,10 @@ export default {
 }
 
 .el-button {
+  width: 100%;
+}
+
+.el-input-number {
   width: 100%;
 }
 

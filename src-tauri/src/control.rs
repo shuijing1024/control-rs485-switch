@@ -102,7 +102,7 @@ impl SwitchController {
             .modbus_context
             .write_multiple_registers(WRITE_BAUD_RATE_ADDRESS, &baud_rate_register_data);
 
-        Self::modbus_action_with_timeout(action, "无法更改波特率", self.timeout).await
+        Self::modbus_action_with_timeout(action, "无法更改波特率", 1000).await
     }
 
     pub async fn disconnect(&mut self) -> AnyHowResult<()> {

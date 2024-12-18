@@ -1,6 +1,6 @@
 [package]
 name = "control-rs485-switch"
-version = "1.0.12"
+version = "1.0.13"
 description = "用于远程控制空气开关"
 authors = ["shuijing"]
 edition = "2021"

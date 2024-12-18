@@ -4,6 +4,7 @@ use chrono::{DateTime, Local};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::string::ToString;
 use tokio_modbus::client::Context as modbusContext;
@@ -11,13 +12,15 @@ use tokio_modbus::prelude::{rtu, Client, Reader, Writer};
 use tokio_modbus::Result as ModbusResult;
 use tokio_modbus::Slave;
 use tokio_serial::SerialPortType::UsbPort;
-use tokio_serial::{SerialPortInfo, SerialStream};
+use tokio_serial::{SerialPort, SerialPortInfo, SerialStream};
 
 const DEFAULT_SERIAL_TIMEOUT_MILLIS: u64 = 1_000;
 const DEFAULT_MODBUS_TIMEOUT_MILLIS: u64 = 6_000;
 const READ_SWITCH_STATE_ADDRESS: u16 = 0x0026;
 const WRITE_SWITCH_STATE_ADDRESS: u16 = 0x0101;
 const WRITE_BAUD_RATE_ADDRESS: u16 = 0x0150;
+
+const SWITCH_ID_GET_COMMAND: [u8; 2] = [0x03, 0xff];
 
 const APP_CONFIG_DIR: &str = "control_rs485_switch";
 const APP_CONTROLLER_CONFIG_FILE_NAME: &str = "switch_config.json";
@@ -204,6 +207,65 @@ impl SwitchController {
             .context("无法写入配置文件")?;
 
         Ok(())
+    }
+
+    pub async fn custom_init(modbus_config: ModbusConfig) -> AnyHowResult<u8> {
+        let mut serial_port = tokio_serial::new(&modbus_config.port_name, modbus_config.baud_rate)
+            .timeout(std::time::Duration::from_millis(
+                DEFAULT_SERIAL_TIMEOUT_MILLIS,
+            ))
+            .open()
+            .context(format!("无法打开串口: {}", modbus_config.port_name))?;
+
+        let mut read_byte_list = Self::get_switch_id(&mut serial_port, 3)?;
+
+        if read_byte_list.len() == 1 {
+            return Ok(read_byte_list[0]);
+        }
+
+        if read_byte_list.len() != 10 {
+            return Err(anyhow::anyhow!("接收到错误ID"));
+        }
+
+        read_byte_list.extend_from_slice(&[0x06, 0x09, 0x00]);
+
+        serial_port
+            .write_all(&read_byte_list)
+            .context("无法写入更改协议命令")?;
+
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+        let read_byte_list = Self::get_switch_id(&mut serial_port, 3)?;
+
+        if read_byte_list.len() == 1 {
+            Ok(read_byte_list[0])
+        } else {
+            Err(anyhow::anyhow!("接收到错误ID"))
+        }
+    }
+
+    fn get_switch_id(
+        serial_port: &mut Box<dyn SerialPort>,
+        read_time: u8,
+    ) -> AnyHowResult<Vec<u8>> {
+        let mut read_buffer: [u8; 10] = [0; 10];
+        let mut read_byte_list = Vec::with_capacity(14);
+
+        serial_port
+            .write_all(&SWITCH_ID_GET_COMMAND)
+            .context("无法写入读取ID命令")?;
+
+        let read_start = Local::now().timestamp();
+
+        while (Local::now().timestamp() - read_start) < read_time as i64 {
+            let read_result = serial_port.read(&mut read_buffer);
+
+            if let Ok(read_byte_number) = read_result {
+                read_byte_list.extend_from_slice(&read_buffer[0..read_byte_number]);
+            }
+        }
+
+        Ok(read_byte_list)
     }
 }
 

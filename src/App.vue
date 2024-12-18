@@ -156,6 +156,18 @@ export default {
 
         return true;
       });
+    },
+    async customInit() {
+      await this.handleRustCommand(async () => {
+        this.slaveId = await invoke("custom_init", {
+          modbus_config: {
+            port_name: this.selectSerialPort,
+            baud_rate: this.baudRate,
+            slave_id: this.slaveId,
+            timeout: this.timeout,
+          }
+        });
+      })
     }
   },
   computed: {
@@ -165,6 +177,18 @@ export default {
       } else {
         return true;
       }
+    },
+
+    custom_init_button_enable_flag() {
+      if (this.switch_connect_state) {
+        return false;
+      } else {
+        if (this.selectSerialPort === "") {
+          return false;
+        }
+      }
+
+      return true;
     },
 
     toggle_operate_button_display_name() {
@@ -282,15 +306,24 @@ export default {
             </el-col>
           </el-row>
           <el-row>
-            <el-col :span="4">
+            <el-col :span="6">
+              <el-button type="primary"
+                         @click="customInit"
+                         :disabled="!custom_init_button_enable_flag"
+                         size="large">
+                初始化开关
+              </el-button>
+            </el-col>
+            <el-col :span="4" :offset="4">
               <el-input-number v-model="resetBaudRate" :min="4800" :max="115200" size="large" :step="200"
                                :disabled="!switch_connect_state"
                                controls-position="right"/>
             </el-col>
-            <el-col :span="6" :offset="14">
+
+            <el-col :span="6" :offset="4">
               <el-button type="primary"
                          @click="changeBaudRate"
-                         :disabled="!switch_connect_state"
+                         :disabled="(!switch_connect_state) || (baudRate===resetBaudRate)"
                          size="large">
                 重设波特率
               </el-button>
@@ -298,7 +331,8 @@ export default {
           </el-row>
           <el-row justify="center">
             <el-col :span="8">
-              <el-button type="primary" @click="toggleOperateButton" size="large" :disabled="!switch_connect_state">
+              <el-button type="primary" @click="toggleOperateButton" size="large"
+                         :disabled="!switch_connect_state">
                 {{ toggle_operate_button_display_name }}
               </el-button>
             </el-col>

@@ -109,6 +109,13 @@ async fn set_baud_rate(
     }
 }
 
+#[tauri::command(rename_all = "snake_case")]
+async fn custom_init(modbus_config: ModbusConfig) -> CustomAppResult<u8> {
+    SwitchController::custom_init(modbus_config)
+        .await
+        .map_to_message()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -129,7 +136,8 @@ pub fn run() {
             operate_switch,
             get_app_config,
             set_app_config,
-            set_baud_rate
+            set_baud_rate,
+            custom_init
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
